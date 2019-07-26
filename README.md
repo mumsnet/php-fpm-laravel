@@ -7,31 +7,40 @@ PHP version 7.3 is supported, but new versions will be added as they become stab
 
 ## How to create a new Laravel microservice based on this image
 
-Let's say you want to create a new service called `testlaravel` to work alongside our other microservices.
+Let's say you want to create a new service called `testlaravel` to work alongside your other microservices.
 
-First create your top level dev folder which will be your repo in github:
+#### First create your top level dev folder which will be your repo in github:
 
 ```bash
 mkdir ~/dev/testlaravel_service
 cd ~/dev/testlaravel_service
 ```
 
-Then run Laravel to create your new application skeleton into a subfolder.  Using a subfolder is best practice
-to avoid copying unnecessary files/folders (like .git etc) into the final docker image.
+#### Then run Laravel to create your new application skeleton:
 
 ```bash
-docker run -it -v `pwd`:/var/www/html mumsnet/php-fpm-laravel:7.3 laravel new testlaravel
+docker run -it -v `pwd`:/var/www/html mumsnet/php-fpm-laravel:7.3 laravel new
 ```
 
-Configure Laravel:
+#### Add some required packages:
+```bash
+docker run -it -v `pwd`:/var/www/html mumsnet/php-fpm-laravel:7.3 composer require mumsnet/mn-monolog
+```
 
-Edit the `.env` file and set `APP_NAME=Testlaravel`, 
-and `APP_URL=https://lhYOURNAME.devmn.net/service/testlaravel`
+#### Edit the `.env` file
 
-Then edit `routes/web.php` and wrap all the routes in a group like this:
+Change these
+* `APP_NAME=Testlaravel`
+* `APP_URL=https://lhYOURNAME.devmn.net/service/testlaravel`
+* `LOG_CHANNEL=stderr`
+
+Add these:
+* `SRV_URL_PREFIX=/service/testlaravel`
+
+#### Then edit `routes/web.php` and wrap all the routes in a group like this:
 
 ```php
-Route::prefix('service/testlaravel')->group(function () {
+Route::prefix(env('SRV_URL_PREFIX'))->group(function () {
     // all existing routes eg:
     Route::get('/', function () {
         return view('welcome');
@@ -39,7 +48,29 @@ Route::prefix('service/testlaravel')->group(function () {
 });
 ```
 
-Next create a `Dockerfile` like this:
+#### Edit `config/logging.php`
+
+Replace `use Monolog\Handler\SyslogUdpHandler;`
+with `use MnMonolog\Handler\PapertrailHandler;` at the top of file.
+
+Then replace the papertrail block with the following:
+
+```php
+        'papertrail' => [
+            'driver' => 'monolog',
+            'level' => 'debug',
+            'handler' => PapertrailHandler::class,
+            'handler_with' => [
+                'host' => env('PAPERTRAIL_HOSTNAME'),
+                'port' => env('PAPERTRAIL_PORT'),
+                'localhost' => env('SITE_HOSTNAME'),
+                'ident' => env('PAPERTRAIL_PROGRAM_NAME')
+            ],
+        ],
+
+```
+
+#### Next create a `Dockerfile` like this:
 
 ```Dockerfile
 FROM mumsnet/php-fpm-laravel:7.3
@@ -47,7 +78,7 @@ FROM mumsnet/php-fpm-laravel:7.3
 ARG COMPOSER_PARAMS_ARG=''
 ENV COMPOSER_PARAMS=$COMPOSER_PARAMS_ARG
 
-COPY --chown=www-data:www-data testlaravel /var/www/html
+COPY --chown=www-data:www-data . /var/www/html
 RUN composer install $COMPOSER_PARAMS && chown -R www-data:www-data /var/www/html
 
 # No need for a final CMD.  It is already part of the base image.
@@ -55,7 +86,7 @@ RUN composer install $COMPOSER_PARAMS && chown -R www-data:www-data /var/www/htm
 # CMD php artisan migrate; /usr/bin/supervisord -c /etc/supervisor/conf.d/supervisord.conf
 ```
 
-Then create your `docker-compose.yml` like this:
+#### Then create your `docker-compose.yml` like this:
 
 ```yaml
 version: '3'
@@ -65,19 +96,14 @@ services:
     container_name: testlaravel
     build: .
     volumes:
-      - ./testlumen1:/var/www/html
+      - .:/var/www/html
 networks:
   default:
     external:
       name: mn_network
 ```
 
-Your project folder structure should end up looking something like this, with your entire 
-Lumen app self-contained in a subfolder:
-
-![Folder structure](folders.png)
-
-Finally add the relevant nginx entry to your router service `dev_server.conf` file:
+#### Finally add the relevant nginx entry to your router service `dev_server.conf` file:
 
 ```nginx
 location ~ ^/(service/testlaravel) {
@@ -87,6 +113,7 @@ location ~ ^/(service/testlaravel) {
 }
 ```
 
-Start your new testlaravel service and restart the router service and you should be able to access it:
+Now you can run `docker-compose build` and `docker-compose up` and restart the router service and you 
+should be able to access your new Laravel microservice:
 
 https://lhYOURNAME.devmn.net/service/testlaravel
