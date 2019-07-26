@@ -37,15 +37,31 @@ Change these
 Add these:
 * `SRV_URL_PREFIX=/service/testlaravel`
 
-#### Then edit `routes/web.php` and wrap all the routes in a group like this:
+#### Then edit `routes/web.php`, add a health-check route and wrap all the routes with a prefix:
 
 ```php
 Route::prefix(env('SRV_URL_PREFIX'))->group(function () {
-    // all existing routes eg:
     Route::get('/', function () {
         return view('welcome');
     });
+    Route::get('health-check', 'HealthCheckController@show');
 });
+```
+
+#### Add a health check controller in `app/Http/Controllers/HealthCheckController.php`:
+
+```php
+<?php
+
+namespace App\Http\Controllers;
+
+class HealthCheckController extends Controller
+{
+    public function show()
+    {
+        return 'ok';
+    }
+}
 ```
 
 #### Edit `config/logging.php`
