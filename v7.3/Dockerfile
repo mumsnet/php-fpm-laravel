@@ -6,4 +6,4 @@ RUN curl -sL https://deb.nodesource.com/setup_10.x | bash \
     && apt-get install -y nodejs
 
 # Install Laravel globally
-RUN composer global require laravel/installer
+RUN composer global require "laravel/installer:^4.0"
